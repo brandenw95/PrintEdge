@@ -72,7 +72,7 @@ def update_printers(subnet, printer_mapping):
         if printer not in installed_printers:
             printer_folder = os.path.join(BASE_DRIVER_PATH, subnet, printer)
             driver_folder = get_architecture_directory(printer_folder)
-            driver_path = os.path.join(driver_folder, "OEMSETUP.inf")
+            driver_path = os.path.join(driver_folder, "OEMSETUP.INF")
             if os.path.exists(driver_path):
                 install_printer(printer, driver_path)
             else:
@@ -182,6 +182,7 @@ def main():
     printer_mapping = {
         "192.168.1.0": ["Takalfa 4002i", "HP LaserJet Pro"],
         "192.168.0.0": ["Canon Pixma MG2525", "Brother HL-L2350DW"],
+        "10.0.1.0": ["Kyocera 4004i", "Brother HL-L2350DW"],
     }
 
     # Check and create folder structure
