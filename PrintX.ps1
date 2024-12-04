@@ -30,7 +30,13 @@ function Show-PrintersDialog {
 }
 
 function Open-Settings {
-    [System.Windows.Forms.MessageBox]::Show("Settings functionality is a placeholder.", "Settings", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+
+    # Show(Message Text, Title Text, OK Button, Information Icon)
+    [System.Windows.Forms.MessageBox]::Show("Settings functionality is a placeholder.",
+                                            "Settings", 
+                                            [System.Windows.Forms.MessageBoxButtons]::OK, 
+                                            [System.Windows.Forms.MessageBoxIcon]::Information
+                                            )
 }
 Function Main{
 
