@@ -92,6 +92,7 @@ function InstallPrinters {
 }
 
 function GetSubnet{
+    
     # Get the current active network adapter with IPv4 addresses
     $currentAdapter = Get-NetIPAddress -AddressFamily IPv4 |
         Where-Object {
