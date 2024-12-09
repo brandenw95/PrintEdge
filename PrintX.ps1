@@ -44,7 +44,7 @@ function InstallPrinters {
         [Parameter(Mandatory)]
         [hashtable]$Printers,
         [Parameter(Mandatory)]
-        [string]$BaseIP
+        [string]$SubnetIP
     )
 
     # EXAMPLE FUNCTION INPUT
@@ -57,7 +57,7 @@ function InstallPrinters {
     foreach ($Printer in $Printers.GetEnumerator()) {
         $PrinterName = $Printer.Value.name
         $DriverPath = $Printer.Value.inf
-        $CurrentIP = $BaseIP
+        $CurrentIP = $SubnetIP
 
         # START - DRIVER INSTALL
         Write-Host "Installing driver for $PrinterName from $DriverPath..."
@@ -67,7 +67,7 @@ function InstallPrinters {
         $PortName = "IP_$CurrentIP"
         $Counter = 1
         while (Get-PrinterPort -Name $PortName -ErrorAction SilentlyContinue) {
-            $PortName = "IP_$BaseIP_$Counter"
+            $PortName = "IP_$SubnetIP_$Counter"
             $Counter++
         }
 
@@ -85,7 +85,7 @@ function InstallPrinters {
         Write-Host "Adding printer $PrinterFinalName with port $PortName..."
         Add-Printer -Name $PrinterFinalName -DriverName $PrinterName -PortName $PortName
 
-        $BaseIP = ([IPV4Address]::Parse($BaseIP).GetAddressBytes() | ForEach-Object{ [int]$_ } | ForEach-Object { $_.ToString() }) -join '.'
+        $SubnetIP = ([IPV4Address]::Parse($SubnetIP).GetAddressBytes() | ForEach-Object{ [int]$_ } | ForEach-Object { $_.ToString() }) -join '.'
     }
 
     Write-Host "All printers installed successfully!"
@@ -93,25 +93,17 @@ function InstallPrinters {
 
 function GetSubnet{
     
-    # Get the current active network adapter with IPv4 addresses
-    $currentAdapter = Get-NetIPAddress -AddressFamily IPv4 |
-        Where-Object {
-            $_.IPAddress -ne "127.0.0.1"
-        } |
-        Sort-Object -Property InterfaceIndex | Select-Object -First 1
+    $activeInterface = Get-NetIPConfiguration | Where-Object { $null -ne $_.IPv4DefaultGateway } | Select-Object -First 1
 
-    if (-not $currentAdapter) {
-        Write-Error "No active IPv4 network adapters found."
-        return $null
+    if ($activeInterface -and $activeInterface.IPv4Address) {
+        $ipAddress = $activeInterface.IPv4Address.IPAddress
     }
 
     # Return the current IP address
-    #Write-Output "$currentAdapter.IPAddress"
-    return $currentAdapter.IPAddress
+    return $ipAddress
 }
 
-
-Function Main{
+Function Main {
 
     $scriptDirectory = $PSScriptRoot
     Write-Output $PSScriptRoot
@@ -122,6 +114,22 @@ Function Main{
         $iconPath = "$($PSHOME)\powershell.exe"
     }
 
+    # Track the last known subnet
+    $global:LastSubnet = $null
+
+    # Define printers per subnet (this is an example - modify as needed)
+    # Each key is a subnet (or partial IP), each value is a hashtable of printer configurations
+    $SubnetPrinters = @{
+        "192.168.1." = @{
+            "Brother HL-L2320D series" = @{ name = "Brother HL-L2320D series"; inf="drivers\Brother-HL-L2320D\32_64\BROHL13A.INF"; ip="192.168.1.110" }
+            "Brother HL-L2370DW series" = @{ name = "Brother HL-L2370DW series"; inf="drivers\Brother-HL-L2370DW\gdi\BROHL17A.INF"; ip="192.168.1.100" }
+        }
+        "10.0.0." = @{
+            "HP LaserJet P2055dn" = @{ name = "HP LaserJet P2055dn"; inf="drivers\HP-LJ-P2055dn\INF\hp2055.inf"; ip="10.0.0.50" }
+        }
+    }
+
+    # Setup Tray Icon
     $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
     $notifyIcon.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($iconPath)
     $notifyIcon.Text = "Print Management"
@@ -141,11 +149,20 @@ Function Main{
         Write-Output "Active Subnet: $subnet"
     })
 
-    # Install Network Printers
+    # Install Network Printers (Manual Trigger)
     $InstallPrintSetting = New-Object System.Windows.Forms.MenuItem("Install Printers")
-    $InstallPrintSetting.add_Click({ InstallPrinters })
+    $InstallPrintSetting.add_Click({
+        # On manual trigger, we still rely on current subnet
+        $currentSubnet = GetSubnet
+        foreach ($sub in $SubnetPrinters.Keys) {
+            if ($currentSubnet -like "$sub*") {
+                InstallPrinters -Printers $SubnetPrinters[$sub] -BaseIP ($SubnetPrinters[$sub].Values[0].ip)
+                break
+            }
+        }
+    })
 
-    # View Settings
+    # Settings
     $menuSettings = New-Object System.Windows.Forms.MenuItem("Settings")
     $menuSettings.add_Click({ OpenSettings })
     
@@ -163,6 +180,53 @@ Function Main{
     $contextMenu.MenuItems.Add($menuExit) | Out-Null
 
     $notifyIcon.ContextMenu = $contextMenu
+
+    # Add a timer to poll every 10 seconds for subnet changes
+    $timer = New-Object System.Windows.Forms.Timer
+    $timer.Interval = 10000 # 10 seconds
+    $timer.Add_Tick({
+        $currentSubnet = GetSubnet
+        if ($currentSubnet -and $currentSubnet -ne $global:LastSubnet) {
+            $global:LastSubnet = $currentSubnet
+            
+            # Identify which printer set corresponds to this subnet
+            $matchedPrinters = $null
+            foreach ($sub in $SubnetPrinters.Keys) {
+                if ($currentSubnet -like "$sub*") {
+                    $matchedPrinters = $SubnetPrinters[$sub]
+                    break
+                }
+            }
+
+            if ($matchedPrinters) {
+                # Install the appropriate printers for the current subnet
+                InstallPrinters -Printers $matchedPrinters -BaseIP ($matchedPrinters.Values[0].ip)
+
+                # Hide or remove other printers not in this set
+                # This is an example of how to remove/hide other printers:
+                $allInstalledPrinters = Get-Printer | Select-Object -ExpandProperty Name
+                $desiredPrinterNames = $matchedPrinters.Keys
+                $printersToRemove = $allInstalledPrinters | Where-Object { $_ -notin $desiredPrinterNames }
+
+                foreach ($p in $printersToRemove) {
+                    try {
+                        Remove-Printer -Name $p -ErrorAction SilentlyContinue
+                    } catch {
+                        # Handle errors if any (e.g. printer in use)
+                    }
+                }
+            } else {
+                # No configured printers for this subnet, remove all known printers (or hide them)
+                $allInstalledPrinters = Get-Printer | Select-Object -ExpandProperty Name
+                foreach ($p in $allInstalledPrinters) {
+                    try {
+                        Remove-Printer -Name $p -ErrorAction SilentlyContinue
+                    } catch {}
+                }
+            }
+        }
+    })
+    $timer.Start()
 
     [System.Windows.Forms.Application]::Run()
 }
