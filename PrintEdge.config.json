@@ -1,0 +1,167 @@
+{
+  "settings": {
+    "pollIntervalSeconds": 30,
+    "managedNamePrefix": "PrintEdge - ",
+    "prefixQueueNames": true,
+    "removeStaleManagedQueues": true,
+    "removeUnmanagedPrinters": false,
+    "dryRun": false,
+    "driverCachePath": "Drivers",
+    "logPath": "%ProgramData%\\PrintEdge\\Logs\\PrintEdge.log",
+    "enableAzureDriverDownload": false,
+    "azureBlobBaseUrl": "https://contoso-print-drivers.blob.core.windows.net/drivers",
+    "azureSasToken": ""
+  },
+  "subnets": [
+    {
+      "name": "Local Test Network",
+      "cidr": "10.0.1.0/24",
+      "printers": [
+        {
+          "id": "local-mfp-01",
+          "displayName": "Local Test MFP",
+          "hostAddress": "10.0.1.50",
+          "location": "Local Office",
+          "defaultDriverName": "Microsoft IPP Class Driver",
+          "infPath": "",
+          "driverBlobPath": "sample/local-mfp-driver.zip",
+          "infRelativePath": "x64/sample.inf"
+        },
+        {
+          "id": "local-label-01",
+          "displayName": "Local Test Labels",
+          "hostAddress": "10.0.1.60",
+          "location": "Local Shipping",
+          "defaultDriverName": "Microsoft IPP Class Driver",
+          "infPath": "",
+          "driverBlobPath": "sample/local-label-driver.zip",
+          "infRelativePath": "x64/sample.inf"
+        }
+      ],
+      "printQueues": [
+        {
+          "name": "Local Test MFP",
+          "printerId": "local-mfp-01",
+          "connectionName": "\\\\printserver\\Local-Test-MFP",
+          "comment": "Local test queue"
+        },
+        {
+          "name": "Local Test Labels",
+          "printerId": "local-label-01",
+          "connectionName": "\\\\printserver\\Local-Test-Labels",
+          "comment": "Local label queue"
+        }
+      ]
+    },
+    {
+      "name": "Head Office",
+      "cidr": "192.168.2.0/24",
+      "printers": [
+        {
+          "id": "hq-mfp-01",
+          "displayName": "HQ Color MFP",
+          "hostAddress": "192.168.1.50",
+          "location": "HQ - Floor 1",
+          "defaultDriverName": "Microsoft IPP Class Driver",
+          "infPath": "",
+          "driverBlobPath": "sample/hq-mfp-driver.zip",
+          "infRelativePath": "x64/sample.inf"
+        },
+        {
+          "id": "hq-label-01",
+          "displayName": "HQ Shipping Label",
+          "hostAddress": "192.168.1.60",
+          "location": "HQ - Shipping",
+          "defaultDriverName": "Microsoft IPP Class Driver",
+          "infPath": "",
+          "driverBlobPath": "sample/hq-label-driver.zip",
+          "infRelativePath": "x64/sample.inf"
+        }
+      ],
+      "printQueues": [
+        {
+          "name": "HQ Color MFP",
+          "printerId": "hq-mfp-01",
+          "connectionName": "\\\\printserver\\HQ-Color-MFP",
+          "comment": "Default color queue"
+        },
+        {
+          "name": "HQ Color MFP Mono",
+          "printerId": "hq-mfp-01",
+          "connectionName": "\\\\printserver\\HQ-Color-MFP-Mono",
+          "comment": "Default black and white queue"
+        },
+        {
+          "name": "HQ Shipping Labels",
+          "printerId": "hq-label-01",
+          "connectionName": "\\\\printserver\\HQ-Shipping-Labels",
+          "comment": "Shipping label queue"
+        }
+      ]
+    },
+    {
+      "name": "Warehouse",
+      "cidr": "10.20.30.0/24",
+      "printers": [
+        {
+          "id": "wh-mfp-01",
+          "displayName": "Warehouse MFP",
+          "hostAddress": "10.20.30.25",
+          "location": "Warehouse Office",
+          "defaultDriverName": "Microsoft IPP Class Driver",
+          "infPath": "",
+          "driverBlobPath": "sample/warehouse-mfp-driver.zip",
+          "infRelativePath": "x64/sample.inf"
+        },
+        {
+          "id": "wh-label-01",
+          "displayName": "Warehouse Zebra Labels",
+          "hostAddress": "10.20.30.40",
+          "location": "Warehouse Packing",
+          "defaultDriverName": "Microsoft IPP Class Driver",
+          "infPath": "",
+          "driverBlobPath": "sample/warehouse-label-driver.zip",
+          "infRelativePath": "x64/sample.inf"
+        }
+      ],
+      "printQueues": [
+        {
+          "name": "Warehouse MFP",
+          "printerId": "wh-mfp-01",
+          "connectionName": "\\\\printserver\\Warehouse-MFP",
+          "comment": "Warehouse office queue"
+        },
+        {
+          "name": "Warehouse Labels",
+          "printerId": "wh-label-01",
+          "connectionName": "\\\\printserver\\Warehouse-Labels",
+          "comment": "Packing station label queue"
+        }
+      ]
+    },
+    {
+      "name": "VPN Users",
+      "cidr": "172.16.50.0/24",
+      "printers": [
+        {
+          "id": "vpn-follow-me",
+          "displayName": "VPN Follow Me Print",
+          "hostAddress": "172.16.50.10",
+          "location": "Remote Access",
+          "defaultDriverName": "Microsoft IPP Class Driver",
+          "infPath": "",
+          "driverBlobPath": "sample/follow-me-driver.zip",
+          "infRelativePath": "x64/sample.inf"
+        }
+      ],
+      "printQueues": [
+        {
+          "name": "Follow Me Print",
+          "printerId": "vpn-follow-me",
+          "connectionName": "\\\\printserver\\Follow-Me-Print",
+          "comment": "Remote users follow-me queue"
+        }
+      ]
+    }
+  ]
+}
