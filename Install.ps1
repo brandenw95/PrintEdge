@@ -85,19 +85,24 @@ function Grant-TaskRunAccess {
     $folder = $service.GetFolder($taskFolderPath)
     $task = $folder.GetTask($TaskName)
     $sddl = [string]$task.GetSecurityDescriptor(0)
-    $authenticatedUsersExecuteAce = "(A;;GRGX;;;AU)"
+    $authenticatedUsersExecuteAce = "(A;;0x1200a9;;;AU)"
 
     if ($sddl -like "*$authenticatedUsersExecuteAce*") {
         return
     }
 
-    $updatedSddl = $sddl
-    $saclIndex = $updatedSddl.IndexOf("S:")
-    if ($saclIndex -gt -1) {
-        $updatedSddl = $updatedSddl.Insert($saclIndex, $authenticatedUsersExecuteAce)
+    $daclIndex = $sddl.IndexOf("D:")
+    if ($daclIndex -lt 0) {
+        $updatedSddl = "{0}D:{1}" -f $sddl, $authenticatedUsersExecuteAce
     }
     else {
-        $updatedSddl = $updatedSddl + $authenticatedUsersExecuteAce
+        $saclIndex = $sddl.IndexOf("S:", $daclIndex)
+        if ($saclIndex -gt -1) {
+            $updatedSddl = $sddl.Insert($saclIndex, $authenticatedUsersExecuteAce)
+        }
+        else {
+            $updatedSddl = $sddl + $authenticatedUsersExecuteAce
+        }
     }
 
     $task.SetSecurityDescriptor($updatedSddl, 0)
@@ -108,7 +113,7 @@ function Install-AppFiles {
         New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null
     }
 
-    foreach ($fileName in @("PrintX.ps1", "PrintEdge.config.json")) {
+    foreach ($fileName in @("PrintEdge.ps1", "PrintEdge.config.json", "PrintEdge.ico")) {
         $sourceFile = Join-Path -Path $sourcePath -ChildPath $fileName
         if (-not (Test-Path -Path $sourceFile)) {
             throw "Required source file not found: $sourceFile"
@@ -133,7 +138,7 @@ function Install-AppFiles {
 }
 
 function Install-ScheduledTasks {
-    $printEdgeScript = Join-Path -Path $InstallPath -ChildPath "PrintX.ps1"
+    $printEdgeScript = Join-Path -Path $InstallPath -ChildPath "PrintEdge.ps1"
     $printEdgeConfig = Join-Path -Path $InstallPath -ChildPath "PrintEdge.config.json"
     $powerShellPath = Get-PowerShellPath
     $taskPathForCmdlets = "{0}\" -f $taskFolderPath
@@ -197,8 +202,10 @@ function Install-Shortcuts {
         New-Item -Path $shortcutFolder -ItemType Directory -Force | Out-Null
     }
 
-    $printEdgeScript = Join-Path -Path $InstallPath -ChildPath "PrintX.ps1"
+    $printEdgeScript = Join-Path -Path $InstallPath -ChildPath "PrintEdge.ps1"
     $printEdgeConfig = Join-Path -Path $InstallPath -ChildPath "PrintEdge.config.json"
+    $iconPath = Join-Path -Path $InstallPath -ChildPath "PrintEdge.ico"
+
     $powerShellPath = Get-PowerShellPath
     $shell = New-Object -ComObject "WScript.Shell"
 
@@ -217,6 +224,7 @@ function Install-Shortcuts {
     )
     $trayShortcut.WorkingDirectory = $InstallPath
     $trayShortcut.Description = "Start the PrintEdge tray application."
+    $trayShortcut.IconLocation = $iconPath
     $trayShortcut.Save()
 
     $syncShortcut = $shell.CreateShortcut((Join-Path -Path $shortcutFolder -ChildPath "PrintEdge Sync Now.lnk"))
@@ -224,6 +232,7 @@ function Install-Shortcuts {
     $syncShortcut.Arguments = '/Run /TN "\PrintEdge\Sync"'
     $syncShortcut.WorkingDirectory = $InstallPath
     $syncShortcut.Description = "Run PrintEdge printer sync with SYSTEM privileges."
+    $syncShortcut.IconLocation = $iconPath
     $syncShortcut.Save()
 
     Write-InstallLog -Message ("Created Start Menu shortcuts in '{0}'." -f $shortcutFolder)
@@ -237,6 +246,17 @@ function Start-PrintEdge {
     }
     else {
         Write-InstallLog -Level "WARN" -Message ("Unable to start elevated sync task '{0}'. schtasks exit code: {1}" -f $syncTaskPath, $process.ExitCode)
+    }
+}
+
+function Start-PrintEdgeTray {
+    $trayTaskPath = "{0}\{1}" -f $taskFolderPath, $trayTaskName
+    $process = Start-Process -FilePath "schtasks.exe" -ArgumentList @("/Run", "/TN", $trayTaskPath) -WindowStyle Hidden -Wait -PassThru
+    if ($process.ExitCode -eq 0) {
+        Write-InstallLog -Message ("Started tray task '{0}'." -f $trayTaskPath)
+    }
+    else {
+        Write-InstallLog -Level "WARN" -Message ("Unable to start tray task '{0}'. It will start at the next user logon. schtasks exit code: {1}" -f $trayTaskPath, $process.ExitCode)
     }
 }
 
@@ -310,3 +330,4 @@ Install-AppFiles
 Install-ScheduledTasks
 Install-Shortcuts
 Start-PrintEdge
+Start-PrintEdgeTray

@@ -10,6 +10,7 @@ This project is intended as a lightweight internal Printix-style client. The inc
 - CIDR matching, for example `192.168.1.0/24`.
 - Generated system tray icon with active subnet status, manual sync, and quit.
 - Double-click tray popup showing only the active subnet's printers and queues.
+- Diagnostic console in the double-click popup with active network, elevated task, and recent log output.
 - Safe cleanup that removes only PrintEdge-managed queues by default.
 - Intune-friendly SYSTEM sync task for direct TCP/IP queues with a standard-user tray UI.
 - Optional Azure Blob Storage driver download for `.zip` or `.inf` driver packages.
@@ -19,9 +20,10 @@ This project is intended as a lightweight internal Printix-style client. The inc
 
 ## Files
 
-- `PrintX.ps1` - main PrintEdge tray and sync program.
+- `PrintEdge.ps1` - main PrintEdge tray and sync program.
 - `PrintEdge.config.json` - subnet, printer, queue, driver, and Azure settings.
 - `Install.ps1` - Intune/Win32 installer that copies PrintEdge to Program Files and creates scheduled tasks.
+- `PrintEdge.ico` - packaged icon copied to Program Files and used by Start Menu shortcuts.
 
 ## Requirements
 
@@ -35,7 +37,7 @@ This project is intended as a lightweight internal Printix-style client. The inc
 Run this from the project folder:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\PrintX.ps1 -ValidateConfig
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\PrintEdge.ps1 -ValidateConfig
 ```
 
 ## Run
@@ -43,19 +45,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\PrintX.ps1 -ValidateCo
 Start the tray app:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\PrintX.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\PrintEdge.ps1
 ```
 
 Run a single sync without the tray:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\PrintX.ps1 -Once
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\PrintEdge.ps1 -Once
 ```
 
 Preview actions without installing drivers or changing printers:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\PrintX.ps1 -Once -WhatIfMode
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\PrintEdge.ps1 -Once -WhatIfMode
 ```
 
 ## Deploy
@@ -68,16 +70,21 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1
 
 The installer copies these files to `C:\Program Files\PrintEdge`:
 
-- `PrintX.ps1`
+- `PrintEdge.ps1`
 - `PrintEdge.config.json`
+- `PrintEdge.ico`
 
 It then creates:
 
-- `\PrintEdge\Sync` - runs `PrintX.ps1 -Once` as `SYSTEM` with highest privileges at startup, at user logon, and when requested.
-- `\PrintEdge\Tray` - starts the normal `PrintX.ps1` tray UI for signed-in standard users.
-- Start Menu shortcuts for **PrintEdge** and **PrintEdge Sync Now**.
+- `\PrintEdge\Sync` - runs `PrintEdge.ps1 -Once` as `SYSTEM` with highest privileges at startup, at user logon, and when requested.
+- `\PrintEdge\Tray` - starts the normal `PrintEdge.ps1` tray UI for signed-in standard users.
+- Start Menu shortcuts for **PrintEdge** and **PrintEdge Sync Now**, both using the generated PrintEdge icon.
+
+After creating the tasks, the installer starts the SYSTEM sync task and requests the tray task immediately. If no interactive user session is available during install, the tray starts automatically at the next user logon.
 
 Standard users can use **PrintEdge Sync Now** to trigger the SYSTEM sync task without being local administrators. The files live under Program Files, so users can run the approved task but cannot change the script or config that the task executes.
+
+While the tray is running, it checks the active IPv4 address on the configured poll interval. If the user changes networks and the active subnet changes, the tray requests `\PrintEdge\Sync` automatically so printer mappings update without restarting the app or manually syncing.
 
 Use this Intune uninstall command:
 
@@ -90,13 +97,13 @@ If you install manually instead of through Intune, copy the two runtime files to
 Validate the dropped files:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Program Files\PrintEdge\PrintX.ps1" -ValidateConfig
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Program Files\PrintEdge\PrintEdge.ps1" -ValidateConfig
 ```
 
 You can still run the tray app manually from that location:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\Program Files\PrintEdge\PrintX.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\Program Files\PrintEdge\PrintEdge.ps1"
 ```
 
 ## Config

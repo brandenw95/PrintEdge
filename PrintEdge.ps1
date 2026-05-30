@@ -20,6 +20,7 @@ $script:ManagedTag = "ManagedBy=PrintEdge"
 $script:Config = $null
 $script:CurrentProfile = $null
 $script:LastIPv4Address = $null
+$script:SyncTaskPath = "\PrintEdge\Sync"
 
 function Get-PropertyValue {
     param(
@@ -182,10 +183,112 @@ function Write-PrintEdgeLog {
     }
 }
 
+function Get-PrintEdgeLogPath {
+    $configuredLogPath = Get-Setting -Name "logPath" -Default $null
+    return (Expand-PrintEdgePath -Path $configuredLogPath)
+}
+
+function Get-RecentPrintEdgeLogLines {
+    param(
+        [int]$LineCount = 80
+    )
+
+    $logPath = Get-PrintEdgeLogPath
+    if ([string]::IsNullOrWhiteSpace($logPath)) {
+        return @("Log path is not configured.")
+    }
+
+    if (-not (Test-Path -Path $logPath)) {
+        return @("Log file has not been created yet: {0}" -f $logPath)
+    }
+
+    try {
+        return @(Get-Content -Path $logPath -Tail $LineCount -ErrorAction Stop)
+    }
+    catch {
+        return @("Unable to read log file '{0}': {1}" -f $logPath, $_.Exception.Message)
+    }
+}
+
 function Test-IsAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
     return $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+}
+
+function Test-PrintEdgeScheduledSyncAvailable {
+    try {
+        $process = Start-Process -FilePath "schtasks.exe" -ArgumentList @("/Query", "/TN", $script:SyncTaskPath) -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
+        return ($process.ExitCode -eq 0)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Start-PrintEdgeScheduledSync {
+    param(
+        [string]$Reason = "sync requested"
+    )
+
+    if (-not (Test-PrintEdgeScheduledSyncAvailable)) {
+        Write-PrintEdgeLog -Level "WARN" -Message ("Elevated sync task '{0}' is not installed; running in current user context." -f $script:SyncTaskPath)
+        return $false
+    }
+
+    try {
+        $process = Start-Process -FilePath "schtasks.exe" -ArgumentList @("/Run", "/TN", $script:SyncTaskPath) -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
+        if ($process.ExitCode -eq 0) {
+            Write-PrintEdgeLog -Message ("Requested elevated sync task '{0}' because {1}." -f $script:SyncTaskPath, $Reason)
+            return $true
+        }
+
+        Write-PrintEdgeLog -Level "WARN" -Message ("Unable to request elevated sync task '{0}'. schtasks exit code: {1}" -f $script:SyncTaskPath, $process.ExitCode)
+    }
+    catch {
+        Write-PrintEdgeLog -Level "WARN" -Message ("Unable to request elevated sync task '{0}': {1}" -f $script:SyncTaskPath, $_.Exception.Message)
+    }
+
+    return $false
+}
+
+function Get-PrintEdgeDiagnosticText {
+    param(
+        [object]$Profile,
+        [string]$CurrentIPv4Address
+    )
+
+    $profileName = "No matching profile"
+    $profileCidr = "n/a"
+    if ($Profile) {
+        $profileName = Get-PropertyValue -InputObject $Profile -Name "name" -Default "Unnamed profile"
+        $profileCidr = Get-PropertyValue -InputObject $Profile -Name "cidr" -Default "Unknown subnet"
+    }
+
+    $adminText = "No"
+    if (Test-IsAdministrator) {
+        $adminText = "Yes"
+    }
+
+    $scheduledSyncText = "Not installed"
+    if (Test-PrintEdgeScheduledSyncAvailable) {
+        $scheduledSyncText = "Installed"
+    }
+
+    $headerLines = @(
+        "PrintEdge diagnostics",
+        "Active IPv4: {0}" -f $CurrentIPv4Address,
+        "Matched profile: {0} ({1})" -f $profileName, $profileCidr,
+        "Running as admin: {0}" -f $adminText,
+        "Elevated sync task: {0}" -f $scheduledSyncText,
+        "Last synced IPv4: {0}" -f $script:LastIPv4Address,
+        "Log: {0}" -f (Get-PrintEdgeLogPath),
+        "",
+        "Recent activity"
+    )
+
+    $logLines = @(Get-RecentPrintEdgeLogLines -LineCount 80)
+    return (($headerLines + $logLines) -join [Environment]::NewLine)
 }
 
 function Initialize-NativeMethods {
@@ -935,9 +1038,14 @@ function Sync-CurrentSubnet {
         return
     }
 
+    $previousIPv4Address = $script:LastIPv4Address
     $script:LastIPv4Address = $currentIPv4Address
     $profile = Select-SubnetProfile -Config $script:Config -IPAddress $currentIPv4Address
     $script:CurrentProfile = $profile
+
+    if (-not (Test-IsAdministrator) -and (Start-PrintEdgeScheduledSync -Reason ("active IPv4 changed from '{0}' to '{1}'" -f $previousIPv4Address, $currentIPv4Address))) {
+        return
+    }
 
     if ($null -eq $profile) {
         Write-PrintEdgeLog -Level "WARN" -Message ("No subnet profile matched active IPv4 address '{0}'." -f $currentIPv4Address)
@@ -970,8 +1078,8 @@ function Show-PrintersDialog {
 
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "PrintEdge"
-    $form.Size = New-Object System.Drawing.Size(760, 540)
-    $form.MinimumSize = New-Object System.Drawing.Size(620, 420)
+    $form.Size = New-Object System.Drawing.Size(760, 690)
+    $form.MinimumSize = New-Object System.Drawing.Size(620, 560)
     $form.StartPosition = "CenterScreen"
     $form.BackColor = $backgroundColor
     $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
@@ -1121,6 +1229,57 @@ function Show-PrintersDialog {
         }
     }
 
+    $diagnosticPanel = New-Object System.Windows.Forms.Panel
+    $diagnosticPanel.Dock = "Bottom"
+    $diagnosticPanel.Height = 176
+    $diagnosticPanel.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#101827")
+    $diagnosticPanel.Padding = New-Object System.Windows.Forms.Padding(18, 10, 18, 14)
+
+    $diagnosticHeader = New-Object System.Windows.Forms.Label
+    $diagnosticHeader.Text = "Console"
+    $diagnosticHeader.AutoSize = $true
+    $diagnosticHeader.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 9)
+    $diagnosticHeader.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#B7C4D6")
+    $diagnosticHeader.Location = New-Object System.Drawing.Point(18, 8)
+
+    $diagnosticTextBox = New-Object System.Windows.Forms.TextBox
+    $diagnosticTextBox.Multiline = $true
+    $diagnosticTextBox.ReadOnly = $true
+    $diagnosticTextBox.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
+    $diagnosticTextBox.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+    $diagnosticTextBox.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#101827")
+    $diagnosticTextBox.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#E8EEF7")
+    $diagnosticTextBox.Font = New-Object System.Drawing.Font("Consolas", 9)
+    $diagnosticTextBox.Location = New-Object System.Drawing.Point(18, 30)
+    $diagnosticTextBox.Size = New-Object System.Drawing.Size(704, 126)
+    $diagnosticTextBox.Anchor = [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right -bor [System.Windows.Forms.AnchorStyles]::Bottom
+    $diagnosticTextBox.Text = Get-PrintEdgeDiagnosticText -Profile $profile -CurrentIPv4Address $currentIPv4Address
+    $diagnosticTextBox.SelectionStart = $diagnosticTextBox.TextLength
+    $diagnosticTextBox.ScrollToCaret()
+
+    $diagnosticTimer = New-Object System.Windows.Forms.Timer
+    $diagnosticTimer.Interval = 3000
+    $diagnosticTimer.Add_Tick({
+        $currentDialogIPv4Address = Get-ActiveIPv4Address
+        $currentDialogProfile = $null
+        if (-not [string]::IsNullOrWhiteSpace($currentDialogIPv4Address)) {
+            $currentDialogProfile = Select-SubnetProfile -Config $Config -IPAddress $currentDialogIPv4Address
+        }
+
+        $diagnosticTextBox.Text = Get-PrintEdgeDiagnosticText -Profile $currentDialogProfile -CurrentIPv4Address $currentDialogIPv4Address
+        $diagnosticTextBox.SelectionStart = $diagnosticTextBox.TextLength
+        $diagnosticTextBox.ScrollToCaret()
+    })
+    $diagnosticTimer.Start()
+
+    $form.Add_FormClosed({
+        $diagnosticTimer.Stop()
+        $diagnosticTimer.Dispose()
+    })
+
+    $diagnosticPanel.Controls.Add($diagnosticHeader)
+    $diagnosticPanel.Controls.Add($diagnosticTextBox)
+
     $buttonPanel = New-Object System.Windows.Forms.Panel
     $buttonPanel.Dock = "Bottom"
     $buttonPanel.Height = 58
@@ -1140,6 +1299,7 @@ function Show-PrintersDialog {
 
     $buttonPanel.Controls.Add($okButton)
     $form.Controls.Add($contentPanel)
+    $form.Controls.Add($diagnosticPanel)
     $form.Controls.Add($buttonPanel)
     $form.Controls.Add($headerPanel)
     $form.ShowDialog() | Out-Null
@@ -1273,7 +1433,7 @@ function Start-PrintEdgeTray {
             Sync-CurrentSubnet -Force -DryRun:$DryRun
             Update-PrintEdgeTrayStatus -Config $script:Config -NotifyIcon $notifyIcon -SubnetMenuItem $menuSubnet -ProfileMenuItem $menuProfile
             [System.Windows.Forms.MessageBox]::Show(
-                "Printer sync completed.",
+                "Printer sync completed or elevated sync was requested.",
                 "PrintEdge",
                 [System.Windows.Forms.MessageBoxButtons]::OK,
                 [System.Windows.Forms.MessageBoxIcon]::Information
