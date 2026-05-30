@@ -15,7 +15,7 @@
   "subnets": [
     {
       "name": "Local Test Network",
-      "cidr": "10.0.1.0/24",
+      "cidr": "192.168.4.0/24",
       "printers": [
         {
           "id": "local-mfp-01",
@@ -42,20 +42,18 @@
         {
           "name": "Local Test MFP",
           "printerId": "local-mfp-01",
-          "connectionName": "\\\\printserver\\Local-Test-MFP",
           "comment": "Local test queue"
         },
         {
           "name": "Local Test Labels",
           "printerId": "local-label-01",
-          "connectionName": "\\\\printserver\\Local-Test-Labels",
           "comment": "Local label queue"
         }
       ]
     },
     {
       "name": "Head Office",
-      "cidr": "192.168.2.0/24",
+      "cidr": "192.168.3.0/24",
       "printers": [
         {
           "id": "hq-mfp-01",
@@ -82,19 +80,16 @@
         {
           "name": "HQ Color MFP",
           "printerId": "hq-mfp-01",
-          "connectionName": "\\\\printserver\\HQ-Color-MFP",
           "comment": "Default color queue"
         },
         {
           "name": "HQ Color MFP Mono",
           "printerId": "hq-mfp-01",
-          "connectionName": "\\\\printserver\\HQ-Color-MFP-Mono",
           "comment": "Default black and white queue"
         },
         {
           "name": "HQ Shipping Labels",
           "printerId": "hq-label-01",
-          "connectionName": "\\\\printserver\\HQ-Shipping-Labels",
           "comment": "Shipping label queue"
         }
       ]
@@ -128,38 +123,88 @@
         {
           "name": "Warehouse MFP",
           "printerId": "wh-mfp-01",
-          "connectionName": "\\\\printserver\\Warehouse-MFP",
           "comment": "Warehouse office queue"
         },
         {
           "name": "Warehouse Labels",
           "printerId": "wh-label-01",
-          "connectionName": "\\\\printserver\\Warehouse-Labels",
           "comment": "Packing station label queue"
         }
       ]
     },
     {
       "name": "VPN Users",
-      "cidr": "172.16.50.0/24",
+      "cidr": "192.168.2.0/24",
       "printers": [
         {
-          "id": "vpn-follow-me",
-          "displayName": "VPN Follow Me Print",
-          "hostAddress": "172.16.50.10",
-          "location": "Remote Access",
+          "id": "test-192-mfp-01",
+          "displayName": "Test 192 MFP",
+          "hostAddress": "192.168.2.50",
+          "location": "192.168.2 Test Office",
           "defaultDriverName": "Microsoft IPP Class Driver",
           "infPath": "",
-          "driverBlobPath": "sample/follow-me-driver.zip",
+          "driverBlobPath": "sample/test-192-mfp-driver.zip",
+          "infRelativePath": "x64/sample.inf"
+        },
+        {
+          "id": "test-192-label-01",
+          "displayName": "Test 192 Labels",
+          "hostAddress": "192.168.2.60",
+          "location": "192.168.2 Test Shipping",
+          "defaultDriverName": "Microsoft IPP Class Driver",
+          "infPath": "",
+          "driverBlobPath": "sample/test-192-label-driver.zip",
           "infRelativePath": "x64/sample.inf"
         }
       ],
       "printQueues": [
         {
-          "name": "Follow Me Print",
-          "printerId": "vpn-follow-me",
-          "connectionName": "\\\\printserver\\Follow-Me-Print",
-          "comment": "Remote users follow-me queue"
+          "name": "Test 192 MFP",
+          "printerId": "test-192-mfp-01",
+          "comment": "192.168.2 test MFP queue"
+        },
+        {
+          "name": "Test 192 Labels",
+          "printerId": "test-192-label-01",
+          "comment": "192.168.2 test label queue"
+        }
+      ]
+    },
+    {
+      "name": "10.155.225 Test Network",
+      "cidr": "10.155.225.0/24",
+      "printers": [
+        {
+          "id": "test-10-155-mfp-01",
+          "displayName": "Test 10.155 MFP",
+          "hostAddress": "10.155.225.50",
+          "location": "10.155.225 Test Office",
+          "defaultDriverName": "Microsoft IPP Class Driver",
+          "infPath": "",
+          "driverBlobPath": "sample/test-10-155-mfp-driver.zip",
+          "infRelativePath": "x64/sample.inf"
+        },
+        {
+          "id": "test-10-155-label-01",
+          "displayName": "Test 10.155 Labels",
+          "hostAddress": "10.155.225.60",
+          "location": "10.155.225 Test Shipping",
+          "defaultDriverName": "Microsoft IPP Class Driver",
+          "infPath": "",
+          "driverBlobPath": "sample/test-10-155-label-driver.zip",
+          "infRelativePath": "x64/sample.inf"
+        }
+      ],
+      "printQueues": [
+        {
+          "name": "Test 10.155 MFP",
+          "printerId": "test-10-155-mfp-01",
+          "comment": "10.155.225 test MFP queue"
+        },
+        {
+          "name": "Test 10.155 Labels",
+          "printerId": "test-10-155-label-01",
+          "comment": "10.155.225 test label queue"
         }
       ]
     }
